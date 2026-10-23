@@ -30,7 +30,7 @@ Open <http://localhost:3000>, sign in, press **Sync**.
 
 ### 3. Deploy so it works from your phone and on a schedule
 - Deploy to Vercel. The local SQLite file doesn't persist there, so create a free [Turso](https://turso.tech) database and set `DATABASE_URL` / `DATABASE_AUTH_TOKEN`. Set the other variables from `.env.example`, with `APP_URL` as your Vercel URL.
-- `vercel.json` registers an hourly cron (`/api/cron/run`: sync, optional auto-filing, digest when due). Vercel's **Hobby plan only allows daily crons**; on Hobby either change the schedule to once a day or call `GET /api/cron/run` hourly from any scheduler (GitHub Actions, cron-job.org) with header `Authorization: Bearer $CRON_SECRET`. The digest sends on the first run at/after your chosen hour.
+- `vercel.json` registers a daily cron at 08:00 UTC (`/api/cron/run`: sync, optional auto-filing, digest when due), which fits Vercel's **Hobby plan** (daily crons only). For more frequent syncs, call `GET /api/cron/run` from any scheduler (GitHub Actions, cron-job.org) with header `Authorization: Bearer $CRON_SECRET`. The digest sends on the first run at/after your chosen hour, so set the digest hour at or before the cron's local time (or it goes out the next day).
 - On your phone open the URL in Chrome → menu → **Add to Home screen / Install app**.
 
 ## Privacy

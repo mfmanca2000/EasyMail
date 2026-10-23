@@ -66,7 +66,7 @@ export function SettingsForm({ initial, zones }: { initial: Settings; zones: str
       <Card>
         <CardHeader>
           <CardTitle>Sorting</CardTitle>
-          <CardDescription>The scheduler syncs hourly. Nothing is moved unless you allow it.</CardDescription>
+          <CardDescription>The scheduler syncs once a day. Nothing is moved unless you allow it.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className={row}>
