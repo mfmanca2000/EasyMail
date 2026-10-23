@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   flexRender,
@@ -51,12 +51,23 @@ function Suggestion({ m }: { m: MessageItem }) {
   );
 }
 
+/** Category a swipe moves the message to: the opposite of its label, or of the model's suggestion. */
+function swipeTarget(m: MessageItem): "important" | "not_important" {
+  const current = m.label ?? (m.score == null ? "important" : m.score >= 0.5 ? "important" : "not_important");
+  return current === "important" ? "not_important" : "important";
+}
+
+const SWIPE_THRESHOLD = 90;
+
 export function MessageTable({ items, timeZone, emptyText }: { items: MessageItem[]; timeZone: string; emptyText: string }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
   const [sorting, setSorting] = useState<SortingState>([{ id: "receivedAt", desc: true }]);
   const [filter, setFilter] = useState("");
   const [selection, setSelection] = useState<RowSelectionState>({});
+  const [swipe, setSwipe] = useState<{ id: string; dx: number; released?: boolean } | null>(null);
+  const drag = useRef<{ id: string; x: number; y: number; active: boolean } | null>(null);
+  const swiped = useRef(false);
 
   const fmt = useMemo(
     () => new Intl.DateTimeFormat("en-GB", { timeZone, day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }),
@@ -71,6 +82,37 @@ export function MessageTable({ items, timeZone, emptyText }: { items: MessageIte
       startTransition(() => router.refresh());
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not save");
+    }
+  }
+
+  function onPointerDown(e: React.PointerEvent, id: string) {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    drag.current = { id, x: e.clientX, y: e.clientY, active: false };
+    swiped.current = false;
+  }
+  function onPointerMove(e: React.PointerEvent<HTMLTableRowElement>) {
+    const d = drag.current;
+    if (!d) return;
+    const dx = e.clientX - d.x;
+    if (!d.active) {
+      // Only start once the gesture is clearly a leftward, mostly horizontal drag; vertical scrolling stays native.
+      if (Math.abs(dx) < 10 || Math.abs(dx) < Math.abs(e.clientY - d.y) * 1.5 || dx > 0) return;
+      d.active = true;
+      swiped.current = true;
+      e.currentTarget.setPointerCapture(e.pointerId);
+    }
+    setSwipe({ id: d.id, dx: Math.min(0, dx) });
+  }
+  function onPointerEnd(e: React.PointerEvent, m: MessageItem) {
+    const d = drag.current;
+    drag.current = null;
+    if (!d?.active) return;
+    const dx = Math.min(0, e.clientX - d.x);
+    if (e.type === "pointerup" && dx <= -SWIPE_THRESHOLD) {
+      setSwipe({ id: m.id, dx: -window.innerWidth, released: true });
+      void label([m.id], swipeTarget(m)).finally(() => setSwipe(null));
+    } else {
+      setSwipe(null);
     }
   }
 
@@ -211,10 +253,36 @@ export function MessageTable({ items, timeZone, emptyText }: { items: MessageIte
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() ? "selected" : undefined}
-                  className={cn(row.original.isJunk && "bg-amber-500/10 hover:bg-amber-500/15", row.getIsSelected() && "bg-muted")}
+                  onPointerDown={(e) => onPointerDown(e, row.original.id)}
+                  onPointerMove={onPointerMove}
+                  onPointerUp={(e) => onPointerEnd(e, row.original)}
+                  onPointerCancel={(e) => onPointerEnd(e, row.original)}
+                  onClickCapture={(e) => {
+                    if (swiped.current) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      swiped.current = false;
+                    }
+                  }}
+                  style={
+                    swipe?.id === row.id
+                      ? {
+                          transform: `translateX(${swipe.dx}px)`,
+                          transition: swipe.released ? "transform 150ms ease-out" : undefined,
+                        }
+                      : undefined
+                  }
+                  className={cn(
+                    "select-none",
+                    row.original.isJunk && "bg-amber-500/10 hover:bg-amber-500/15",
+                    row.getIsSelected() && "bg-muted",
+                    swipe?.id === row.id &&
+                      -swipe.dx >= SWIPE_THRESHOLD &&
+                      (swipeTarget(row.original) === "important" ? "bg-emerald-500/25" : "bg-slate-500/25"),
+                  )}
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id} className={(cell.column.columnDef.meta as { className?: string } | undefined)?.className}>
+                    <TableCell key={cell.id} className={cn("touch-pan-y", (cell.column.columnDef.meta as { className?: string } | undefined)?.className)}>
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </TableCell>
                   ))}
@@ -231,6 +299,9 @@ export function MessageTable({ items, timeZone, emptyText }: { items: MessageIte
         </Table>
       </div>
 
+      <p className="text-xs text-muted-foreground">
+        Swipe a message left to move it to the other category (the row tints once you have gone far enough).
+      </p>
       <div className="flex items-center justify-between text-sm text-muted-foreground">
         <span>
           {table.getFilteredRowModel().rows.length} messages · page {table.getState().pagination.pageIndex + 1} of{" "}
