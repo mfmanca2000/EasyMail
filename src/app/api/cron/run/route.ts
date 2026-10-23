@@ -6,9 +6,13 @@ import { getSettings } from "@/lib/settings";
 export const maxDuration = 60;
 
 // Meant to be called hourly: syncs (and files mail if auto-organise is on), then sends the daily digest once it is due.
-export const GET = cron(async () => {
+const handler = cron(async () => {
   const s = await getSettings();
   const synced = await sync({ organize: s.autoOrganize });
   const digest = await sendDigestIfDue();
   return { synced, digest };
 });
+
+export const GET = handler;
+// Uptime monitors (e.g. UptimeRobot) often ping with HEAD; run the job the same way.
+export const HEAD = handler;
