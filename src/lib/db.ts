@@ -38,9 +38,10 @@ const SCHEMA = [
 
 export async function db(): Promise<Client> {
   if (!client) {
+    const e = env();
     client = createClient({
-      url: env().DATABASE_URL,
-      authToken: env().DATABASE_AUTH_TOKEN,
+      url: e.TURSO_DATABASE_URL ?? e.DATABASE_URL ?? "file:easymail.db",
+      authToken: e.TURSO_AUTH_TOKEN ?? e.DATABASE_AUTH_TOKEN,
     });
   }
   if (!ready) {

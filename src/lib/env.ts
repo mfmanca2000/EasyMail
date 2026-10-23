@@ -10,7 +10,10 @@ const schema = z.object({
   SESSION_SECRET: z.string().min(32),
   /** Bearer token the scheduler uses to call /api/cron/*. */
   CRON_SECRET: z.string().min(16),
-  DATABASE_URL: z.string().default("file:easymail.db"),
+  /** Turso (libSQL) URL; falls back to DATABASE_URL, then a local SQLite file. */
+  TURSO_DATABASE_URL: z.string().optional(),
+  TURSO_AUTH_TOKEN: z.string().optional(),
+  DATABASE_URL: z.string().optional(),
   DATABASE_AUTH_TOKEN: z.string().optional(),
   /** Optional: enables LLM-written digest summaries. Without it the digest is a plain grouped list. */
   ANTHROPIC_API_KEY: z.string().optional(),
