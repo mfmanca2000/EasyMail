@@ -9,6 +9,8 @@ export const settingsSchema = z.object({
   autoOrganize: z.boolean(),
   /** Model must be at least this sure (0.5-0.99) before a prediction is acted on automatically. */
   confidenceThreshold: z.number().min(0.5).max(0.99),
+  /** Also move predicted mail out of your own custom folders (otherwise only mail you labelled yourself). */
+  moveFromCustomFolders: z.boolean(),
   importantFolder: z.string().min(1).max(50),
   notImportantFolder: z.string().min(1).max(50),
   /** How many recent messages to read per folder on each sync. */
@@ -23,6 +25,7 @@ export const DEFAULT_SETTINGS: Settings = {
   timezone: "Europe/Rome",
   autoOrganize: false,
   confidenceThreshold: 0.85,
+  moveFromCustomFolders: false,
   importantFolder: "Important",
   notImportantFolder: "Not Important",
   syncDepth: 200,

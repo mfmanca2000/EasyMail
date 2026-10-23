@@ -158,8 +158,9 @@ export async function planMoves(settings: Settings): Promise<Plan> {
   const rows = await query<MessageRow>("SELECT * FROM messages");
   const plan: Plan = [];
   for (const r of rows) {
-    // Only reshuffle mail in inbox/junk or in our folders; mail in other folders moves only on an explicit user label.
-    const free = r.folder_kind !== "other" || r.label_source === "user";
+    // Only reshuffle mail in inbox/junk or in our folders; mail in other folders moves only on an explicit user label
+    // unless the user opted in to moving predicted mail out of custom folders.
+    const free = r.folder_kind !== "other" || r.label_source === "user" || settings.moveFromCustomFolders;
     if (!free) continue;
     const to = effectiveLabel(r, settings.confidenceThreshold);
     if (!to) continue;

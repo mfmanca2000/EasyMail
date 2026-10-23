@@ -79,6 +79,10 @@ export function SettingsForm({ initial, zones }: { initial: Settings; zones: str
               onChange={(e) => set("confidenceThreshold", Number(e.target.value))} />
           </div>
           <div className={row}>
+            <Label htmlFor="custom">Also move predicted mail out of my own custom folders</Label>
+            <Switch id="custom" checked={s.moveFromCustomFolders} onCheckedChange={(v) => set("moveFromCustomFolders", v)} />
+          </div>
+          <div className={row}>
             <Label htmlFor="imp">Important folder name</Label>
             <Input id="imp" className="w-48" value={s.importantFolder} onChange={(e) => set("importantFolder", e.target.value)} />
           </div>
