@@ -59,6 +59,14 @@ export function effectiveLabel(r: MessageRow, threshold: number): Label | null {
   return r.score >= 0.5 ? "important" : "not_important";
 }
 
+/** Prediction sure enough (`settings.autoBucketConfidence`) to show the mail in its tab instead of "To review". */
+export function autoBucket(score: number | null, confidence: number): Label | null {
+  if (score == null) return null;
+  if (score >= confidence) return "important";
+  if (score <= 1 - confidence) return "not_important";
+  return null;
+}
+
 export type SyncResult = { scanned: number; trained: number; moved: number; failedMoves: number };
 
 /** Read all folders, learn from the user's labels, score the rest, optionally move mail. */
@@ -277,9 +285,11 @@ export async function stats(settings?: Settings): Promise<Stats> {
     `SELECT CASE WHEN label_source IN ('user','folder') AND label = 'important' THEN 'important'
                  WHEN label_source IN ('user','folder') AND label = 'not_important' THEN 'notImportant'
                  WHEN ? IS NOT NULL AND received_at < ? THEN 'old'
+                 WHEN score >= ? THEN 'important'
+                 WHEN score <= ? THEN 'notImportant'
                  ELSE 'review' END AS k, COUNT(*) AS n
      FROM messages GROUP BY k`,
-    [cutoff, cutoff],
+    [cutoff, cutoff, settings.autoBucketConfidence, 1 - settings.autoBucketConfidence],
   );
   const n = (k: string) => Number(rows.find((r) => r.k === k)?.n ?? 0);
   const folderRows = await query<{ k: string; n: number }>(

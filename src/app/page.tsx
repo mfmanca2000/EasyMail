@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { databaseLabel, kvGet, query } from "@/lib/db";
 import { MIN_EXAMPLES } from "@/lib/classifier";
-import { planMoves, reviewCutoff, stats, type MessageRow } from "@/lib/mail";
+import { autoBucket, planMoves, reviewCutoff, stats, type MessageRow } from "@/lib/mail";
 import { getSettings } from "@/lib/settings";
 
 export const dynamic = "force-dynamic";
@@ -30,6 +30,7 @@ export default async function Home() {
   const items: BoardItem[] = rows.flatMap((r) => {
     const confirmed = r.label_source === "user" || r.label_source === "folder";
     if (!confirmed && cutoff && r.received_at < cutoff) return [];
+    const auto = confirmed ? null : autoBucket(r.score, settings.autoBucketConfidence);
     return [{
       id: r.id,
       sender: r.sender,
@@ -40,7 +41,8 @@ export default async function Home() {
       isJunk: r.folder_kind === "junk" || !!r.was_junk,
       isRead: !!r.is_read,
       webLink: r.web_link,
-      label: confirmed ? r.label : null,
+      label: confirmed ? r.label : auto,
+      auto: auto !== null,
       score: r.score,
       planned: plan.get(r.id) ?? null,
     }];

@@ -28,15 +28,18 @@ export type MessageItem = {
   isJunk: boolean;
   isRead: boolean;
   webLink: string | null;
-  /** Confirmed label (user or folder), if any. */
+  /** Confirmed label (user or folder), or the model's prediction when `auto` is set. */
   label: "important" | "not_important" | null;
+  /** The label is the model's high-confidence prediction, not yet confirmed by the user. */
+  auto?: boolean;
   /** Model's P(important), null while it has too little training data. */
   score: number | null;
 };
 
 function Suggestion({ m }: { m: MessageItem }) {
   if (m.label) {
-    return m.label === "important" ? <Badge variant="success">Important</Badge> : <Badge variant="secondary">Not important</Badge>;
+    const badge = m.label === "important" ? <Badge variant="success">Important</Badge> : <Badge variant="secondary">Not important</Badge>;
+    return m.auto ? <span className="inline-flex items-center gap-1">{badge}<Badge variant="outline" className="font-normal">auto</Badge></span> : badge;
   }
   if (m.score == null) return <Badge variant="outline">Unsure</Badge>;
   const imp = m.score >= 0.5;
@@ -105,7 +108,7 @@ export function MessageTable({
     if (!d?.active) return;
     const dx = e.clientX - d.x;
     const target = swipeTarget(dx);
-    if (e.type === "pointerup" && Math.abs(dx) >= SWIPE_THRESHOLD && m.label !== target) {
+    if (e.type === "pointerup" && Math.abs(dx) >= SWIPE_THRESHOLD && (m.label !== target || m.auto)) {
       setSwipe({ id: m.id, dx: Math.sign(dx) * window.innerWidth, released: true });
       void label([m.id], target).finally(() => setSwipe(null));
     } else {
