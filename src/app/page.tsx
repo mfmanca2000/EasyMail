@@ -6,7 +6,7 @@ import { MailBoard, type BoardItem } from "@/components/mail-board";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { kvGet, query } from "@/lib/db";
+import { databaseIsEphemeral, kvGet, query } from "@/lib/db";
 import { MIN_EXAMPLES } from "@/lib/classifier";
 import { planMoves, stats, type MessageRow } from "@/lib/mail";
 import { getSettings } from "@/lib/settings";
@@ -45,6 +45,16 @@ export default async function Home() {
 
   return (
     <main className="mx-auto max-w-5xl space-y-5 px-4 py-6">
+      {databaseIsEphemeral() && (
+        <Card className="border-destructive">
+          <CardContent className="flex flex-wrap items-center gap-2 p-4 text-sm">
+            <Badge variant="warning">Database not persistent</Badge>
+            The database URL is a local file (<code>file:</code>), which Vercel erases on every deploy. You will be signed out and
+            lose all labels and counters each time. Set <code>TURSO_DATABASE_URL</code> to a <code>libsql://…</code> URL (and{" "}
+            <code>TURSO_AUTH_TOKEN</code>) for the Production environment, then redeploy.
+          </CardContent>
+        </Card>
+      )}
       <header className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">EasyMail</h1>
         <div className="flex items-center gap-2">
