@@ -273,6 +273,10 @@ export function MessageTable({
                   }
                   className={cn(
                     "select-none",
+                    // Unlabeled mail is tinted by the model's forecast: light blue for important, light red for not.
+                    !row.original.label &&
+                      row.original.score != null &&
+                      (row.original.score >= 0.5 ? "bg-sky-400/10 hover:bg-sky-400/15" : "bg-red-400/10 hover:bg-red-400/15"),
                     row.original.isJunk && "bg-amber-500/10 hover:bg-amber-500/15",
                     row.getIsSelected() && "bg-muted",
                     swipe?.id === row.id &&
