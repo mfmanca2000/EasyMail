@@ -23,6 +23,7 @@ export function ActionsBar({ deletable }: { deletable: number }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [, startTransition] = useTransition();
   const [permanent, setPermanent] = useState(false);
+  const [purgeOpen, setPurgeOpen] = useState(false);
 
   async function run<T>(key: string, fn: () => Promise<T>, done: (r: T) => string) {
     setBusy(key);
@@ -71,7 +72,7 @@ export function ActionsBar({ deletable }: { deletable: number }) {
         {spin("digest", <Send />)} Send digest now
       </Button>
 
-      <AlertDialog>
+      <AlertDialog open={purgeOpen} onOpenChange={(o) => (busy === "purge" ? undefined : setPurgeOpen(o))}>
         <AlertDialogTrigger asChild>
           <Button variant="destructive" disabled={!!busy} className="sm:ml-auto">
             <Trash2 /> Delete all not important
@@ -90,15 +91,18 @@ export function ActionsBar({ deletable }: { deletable: number }) {
             <Label htmlFor="permanent">Delete permanently (skip the Deleted Items folder)</Label>
           </div>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={busy === "purge"}>Cancel</AlertDialogCancel>
             <Button
               variant="destructive"
-              onClick={() =>
-                run("purge", () => api<{ deleted: number; failed: number }>("/api/purge", "POST", { permanent }),
-                  (r) => `Deleted ${r.deleted} messages${r.failed ? ` (${r.failed} failed)` : ""}`)
-              }
+              disabled={!!busy}
+              onClick={async () => {
+                await run("purge", () => api<{ deleted: number; failed: number }>("/api/purge", "POST", { permanent }),
+                  (r) =>
+                    `${permanent ? "Permanently deleted" : "Moved to Deleted Items:"} ${r.deleted} messages${r.failed ? ` (${r.failed} failed)` : ""}`);
+                setPurgeOpen(false);
+              }}
             >
-              Delete everything
+              {spin("purge", <Trash2 />)} {busy === "purge" ? "Deleting..." : "Delete everything"}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
