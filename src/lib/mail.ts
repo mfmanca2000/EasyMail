@@ -96,25 +96,25 @@ export async function sync(opts: { organize?: boolean } = {}): Promise<SyncResul
       seen.add(m.id);
       const prev = existing.get(m.id);
       const sender = (m.from?.emailAddress.address ?? "").toLowerCase();
-      let label = prev?.label ?? null;
-      let source = prev?.label_source ?? null;
       // A message that appears in one of our folders without us having put it there was moved by the user: learn from it.
-      if ((kind === "important" || kind === "not_important") && (!prev || prev.folder_kind !== kind)) {
-        label = kind;
-        source = "folder";
-      }
+      const fromFolder = (kind === "important" || kind === "not_important") && (!prev || prev.folder_kind !== kind);
+      // Existing rows keep whatever label is in the database right now: the user may have labelled them while this sync was
+      // reading from Graph, so the label is never written back from the (stale) snapshot taken above.
       stmts.push({
         sql: `INSERT INTO messages(id, folder_id, folder_kind, was_junk, subject, sender, sender_name, preview, received_at, first_seen_at, is_read, web_link, label, label_source)
               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)
               ON CONFLICT(id) DO UPDATE SET folder_id=excluded.folder_id, folder_kind=excluded.folder_kind,
-                was_junk=MAX(was_junk, excluded.was_junk), is_read=excluded.is_read,
-                label=excluded.label, label_source=excluded.label_source`,
+                was_junk=MAX(was_junk, excluded.was_junk), is_read=excluded.is_read`,
         args: [
           m.id, folderId, kind, kind === "junk" ? 1 : 0, m.subject ?? "", sender,
-          m.from?.emailAddress.name ?? "", (m.bodyPreview ?? "").slice(0, 300), m.receivedDateTime ?? prev?.received_at ?? now,
-          prev?.first_seen_at ?? now, m.isRead ? 1 : 0, m.webLink ?? null, label, source,
+          m.from?.emailAddress.name ?? "", (m.bodyPreview ?? "").slice(0, 300), m.receivedDateTime,
+          prev?.first_seen_at ?? now, m.isRead ? 1 : 0, m.webLink ?? null,
+          fromFolder ? kind : null, fromFolder ? "folder" : null,
         ],
       });
+      if (fromFolder && prev) {
+        stmts.push({ sql: "UPDATE messages SET label = ?, label_source = 'folder' WHERE id = ?", args: [kind, m.id] });
+      }
     }
   }
   // Forget messages that left the folders we watch (deleted, sent, archived elsewhere).
@@ -129,6 +129,14 @@ export async function sync(opts: { organize?: boolean } = {}): Promise<SyncResul
 
 /** Bring the feature counts in line with confirmed labels (user choice or folder placement). */
 async function learn(): Promise<number> {
+  // Labels that were cleared: take them back out of the model.
+  const cleared = await query<MessageRow>(
+    "SELECT * FROM messages WHERE trained_label IS NOT NULL AND (label_source IS NULL OR label_source = 'auto')",
+  );
+  for (const r of cleared) {
+    await adjust(like(r), r.trained_label!, -1);
+    await exec("UPDATE messages SET trained_label = NULL WHERE id = ?", [r.id]);
+  }
   const rows = await query<MessageRow>(
     `SELECT * FROM messages WHERE label_source IN ('user','folder') AND (trained_label IS NULL OR trained_label != label)`,
   );
@@ -137,7 +145,7 @@ async function learn(): Promise<number> {
     await adjust(like(r), r.label!, 1);
     await exec("UPDATE messages SET trained_label = ? WHERE id = ?", [r.label, r.id]);
   }
-  return rows.length;
+  return rows.length + cleared.length;
 }
 
 async function rescore(): Promise<void> {
@@ -232,28 +240,45 @@ export async function purgeNotImportant(permanent: boolean): Promise<{ deleted: 
 }
 
 export type Stats = {
+  /** Confirmed (user or folder) as important / not important, whatever Outlook folder the mail is in right now. */
   important: number;
   notImportant: number;
-  junk: number;
+  /** Not confirmed yet: no label, or only moved by the model. */
   review: number;
+  /** Mail currently sitting in the Outlook Junk folder. */
+  junk: number;
+  /** Mail physically in the Not Important folder; the purge button deletes this plus junk. */
+  inNotImportantFolder: number;
+  /** Mail whose label says it belongs in another folder; it moves on the next "File mail". */
+  pendingImportant: number;
+  pendingNotImportant: number;
   labelled: number;
   ready: boolean;
 };
 
-export async function stats(): Promise<Stats> {
+export async function stats(settings?: Settings): Promise<Stats> {
   const rows = await query<{ k: string; n: number }>(
-    `SELECT CASE WHEN folder_kind='junk' THEN 'junk' WHEN folder_kind='important' THEN 'important' WHEN folder_kind='not_important' THEN 'notImportant' ELSE 'other' END AS k, COUNT(*) AS n
+    `SELECT CASE WHEN label_source IN ('user','folder') AND label = 'important' THEN 'important'
+                 WHEN label_source IN ('user','folder') AND label = 'not_important' THEN 'notImportant'
+                 ELSE 'review' END AS k, COUNT(*) AS n
      FROM messages GROUP BY k`,
   );
   const n = (k: string) => Number(rows.find((r) => r.k === k)?.n ?? 0);
-  const review = await query<{ n: number }>("SELECT COUNT(*) AS n FROM messages WHERE label_source IS NULL OR label_source = 'auto'");
+  const folderRows = await query<{ k: string; n: number }>(
+    "SELECT folder_kind AS k, COUNT(*) AS n FROM messages WHERE folder_kind IN ('junk','not_important') GROUP BY folder_kind",
+  );
+  const inFolder = (k: string) => Number(folderRows.find((r) => r.k === k)?.n ?? 0);
   const labelled = await query<{ n: number }>("SELECT important + not_important AS n FROM features WHERE feature = '__docs__'");
+  const plan = await planMoves(settings ?? (await getSettings()));
   const total = Number(labelled[0]?.n ?? 0);
   return {
     important: n("important"),
     notImportant: n("notImportant"),
-    junk: n("junk"),
-    review: Number(review[0]?.n ?? 0),
+    review: n("review"),
+    junk: inFolder("junk"),
+    inNotImportantFolder: inFolder("not_important"),
+    pendingImportant: plan.filter((p) => p.to === "important").length,
+    pendingNotImportant: plan.filter((p) => p.to === "not_important").length,
     labelled: total,
     ready: total >= MIN_EXAMPLES,
   };

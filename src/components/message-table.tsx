@@ -1,6 +1,5 @@
 "use client";
-import { useMemo, useRef, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useMemo, useRef, useState } from "react";
 import {
   flexRender,
   getCoreRowModel,
@@ -13,12 +12,10 @@ import {
   type RowSelectionState,
 } from "@tanstack/react-table";
 import { ArrowUpDown, Check, Star, X } from "lucide-react";
-import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { api } from "@/lib/client";
 import { cn } from "@/lib/utils";
 
 export type MessageItem = {
@@ -59,9 +56,17 @@ function swipeTarget(m: MessageItem): "important" | "not_important" {
 
 const SWIPE_THRESHOLD = 90;
 
-export function MessageTable({ items, timeZone, emptyText }: { items: MessageItem[]; timeZone: string; emptyText: string }) {
-  const router = useRouter();
-  const [, startTransition] = useTransition();
+export function MessageTable({
+  items,
+  timeZone,
+  emptyText,
+  onLabel,
+}: {
+  items: MessageItem[];
+  timeZone: string;
+  emptyText: string;
+  onLabel: (ids: string[], value: "important" | "not_important") => Promise<void>;
+}) {
   const [sorting, setSorting] = useState<SortingState>([{ id: "receivedAt", desc: true }]);
   const [filter, setFilter] = useState("");
   const [selection, setSelection] = useState<RowSelectionState>({});
@@ -75,14 +80,8 @@ export function MessageTable({ items, timeZone, emptyText }: { items: MessageIte
   );
 
   async function label(ids: string[], value: "important" | "not_important") {
-    try {
-      await api("/api/label", "POST", { ids, label: value });
-      toast.success(`${ids.length} marked ${value === "important" ? "important" : "not important"}`);
-      setSelection({});
-      startTransition(() => router.refresh());
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not save");
-    }
+    setSelection({});
+    await onLabel(ids, value);
   }
 
   function onPointerDown(e: React.PointerEvent, id: string) {

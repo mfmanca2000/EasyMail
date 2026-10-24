@@ -36,11 +36,21 @@ const SCHEMA = [
   )`,
 ];
 
+function databaseUrl(): string {
+  const e = env();
+  return e.TURSO_DATABASE_URL || e.DATABASE_URL || "file:easymail.db";
+}
+
+/** True on Vercel when the database is a local file: it lives on a throwaway filesystem and is wiped on every deploy. */
+export function databaseIsEphemeral(): boolean {
+  return !!process.env.VERCEL && databaseUrl().startsWith("file:");
+}
+
 export async function db(): Promise<Client> {
   if (!client) {
     const e = env();
     client = createClient({
-      url: e.TURSO_DATABASE_URL ?? e.DATABASE_URL ?? "file:easymail.db",
+      url: databaseUrl(),
       authToken: e.TURSO_AUTH_TOKEN ?? e.DATABASE_AUTH_TOKEN,
     });
   }
