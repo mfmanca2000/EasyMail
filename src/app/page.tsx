@@ -2,14 +2,13 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Settings as SettingsIcon } from "lucide-react";
 import { ActionsBar } from "@/components/actions-bar";
-import { MessageTable, type MessageItem } from "@/components/message-table";
+import { MailBoard, type BoardItem } from "@/components/mail-board";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent } from "@/components/ui/card";
 import { kvGet, query } from "@/lib/db";
 import { MIN_EXAMPLES } from "@/lib/classifier";
-import { stats, type MessageRow } from "@/lib/mail";
+import { planMoves, stats, type MessageRow } from "@/lib/mail";
 import { getSettings } from "@/lib/settings";
 
 export const dynamic = "force-dynamic";
@@ -19,15 +18,16 @@ export default async function Home() {
   if (!(await kvGet("ms_refresh_token"))) {
     redirect(`/login?error=${encodeURIComponent("Not connected to Microsoft. Please sign in again.")}`);
   }
-  const [rows, s, settings] = await Promise.all([
+  const settings = await getSettings();
+  const [rows, s] = await Promise.all([
     query<MessageRow>("SELECT * FROM messages ORDER BY received_at DESC LIMIT 1500"),
-    stats(),
-    getSettings(),
+    stats(settings),
   ]);
 
-  const items = rows.map((r) => ({
-    confirmed: r.label_source === "user" || r.label_source === "folder",
-    item: {
+  const plan = new Map((await planMoves(settings)).map((p) => [p.id, p.to]));
+  const items: BoardItem[] = rows.map((r) => {
+    const confirmed = r.label_source === "user" || r.label_source === "folder";
+    return {
       id: r.id,
       sender: r.sender,
       senderName: r.sender_name,
@@ -37,25 +37,11 @@ export default async function Home() {
       isJunk: r.folder_kind === "junk" || !!r.was_junk,
       isRead: !!r.is_read,
       webLink: r.web_link,
-      label: r.label_source === "user" || r.label_source === "folder" ? r.label : null,
+      label: confirmed ? r.label : null,
       score: r.score,
-    } satisfies MessageItem,
-    label: r.label,
-  }));
-
-  const review = items.filter((i) => !i.confirmed).map((i) => i.item);
-  const important = items.filter((i) => i.confirmed && i.label === "important").map((i) => i.item);
-  const notImportant = items.filter((i) => i.confirmed && i.label === "not_important").map((i) => i.item);
-
-  const stat = (label: string, value: number, hint?: string) => (
-    <Card>
-      <CardHeader className="p-4 pb-1">
-        <CardDescription>{label}</CardDescription>
-        <CardTitle className="text-2xl">{value}</CardTitle>
-      </CardHeader>
-      {hint && <CardContent className="p-4 pt-0 text-xs text-muted-foreground">{hint}</CardContent>}
-    </Card>
-  );
+      planned: plan.get(r.id) ?? null,
+    };
+  });
 
   return (
     <main className="mx-auto max-w-5xl space-y-5 px-4 py-6">
@@ -71,13 +57,6 @@ export default async function Home() {
         </div>
       </header>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {stat("Important", s.important)}
-        {stat("Not important", s.notImportant)}
-        {stat("Junk", s.junk)}
-        {stat("To review", s.review)}
-      </div>
-
       {!s.ready && (
         <Card>
           <CardContent className="flex flex-wrap items-center gap-2 p-4 text-sm">
@@ -89,24 +68,9 @@ export default async function Home() {
         </Card>
       )}
 
-      <ActionsBar deletable={s.notImportant + s.junk} />
+      <ActionsBar deletable={s.inNotImportantFolder + s.junk} />
 
-      <Tabs defaultValue="review">
-        <TabsList>
-          <TabsTrigger value="review">To review ({review.length})</TabsTrigger>
-          <TabsTrigger value="important">Important ({important.length})</TabsTrigger>
-          <TabsTrigger value="not_important">Not important ({notImportant.length})</TabsTrigger>
-        </TabsList>
-        <TabsContent value="review" className="pt-3">
-          <MessageTable items={review} timeZone={settings.timezone} emptyText="Nothing to review." />
-        </TabsContent>
-        <TabsContent value="important" className="pt-3">
-          <MessageTable items={important} timeZone={settings.timezone} emptyText="No important mail yet." />
-        </TabsContent>
-        <TabsContent value="not_important" className="pt-3">
-          <MessageTable items={notImportant} timeZone={settings.timezone} emptyText="No mail set aside yet." />
-        </TabsContent>
-      </Tabs>
+      <MailBoard items={items} stats={s} timeZone={settings.timezone} />
     </main>
   );
 }
