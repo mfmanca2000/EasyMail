@@ -44,7 +44,7 @@ const messageSchema = z.object({
   id: z.string(),
   subject: z.string().nullish(),
   bodyPreview: z.string().nullish(),
-  receivedDateTime: z.string(),
+  receivedDateTime: z.string().nullish(), // null for drafts
   isRead: z.boolean().optional(),
   webLink: z.string().nullish(),
   from: z
