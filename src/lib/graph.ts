@@ -25,6 +25,14 @@ async function graph<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
 }
 
+/** Parse a Graph response, naming the call and the offending fields if it doesn't match (not a user-input error). */
+function parseGraph<S extends z.ZodType>(schema: S, data: unknown, what: string): z.infer<S> {
+  const r = schema.safeParse(data);
+  if (r.success) return r.data;
+  const detail = r.error.issues.slice(0, 3).map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`).join("; ");
+  throw new Error(`Unexpected Graph response for ${what} - ${detail}`);
+}
+
 const folderSchema = z.object({
   id: z.string(),
   displayName: z.string(),
@@ -52,7 +60,7 @@ const page = <T extends z.ZodType>(item: T) =>
 export async function wellKnownFolderIds() {
   const names = ["inbox", "junkemail", "sentitems", "drafts", "deleteditems", "outbox"] as const;
   const entries = await Promise.all(
-    names.map(async (n) => [n, folderSchema.parse(await graph(`/me/mailFolders/${n}?$select=id,displayName`)).id] as const),
+    names.map(async (n) => [n, parseGraph(folderSchema, await graph(`/me/mailFolders/${n}?$select=id,displayName`), `folder ${n}`).id] as const),
   );
   return Object.fromEntries(entries) as Record<(typeof names)[number], string>;
 }
@@ -63,7 +71,7 @@ export async function listAllFolders(): Promise<MailFolder[]> {
   const walk = async (path: string) => {
     let next: string | undefined = `${path}?$top=100&$select=id,displayName,childFolderCount`;
     while (next) {
-      const p: z.infer<ReturnType<typeof page<typeof folderSchema>>> = page(folderSchema).parse(await graph(next));
+      const p: z.infer<ReturnType<typeof page<typeof folderSchema>>> = parseGraph(page(folderSchema), await graph(next), "folder list");
       for (const f of p.value) {
         out.push(f);
         if (f.childFolderCount) await walk(`/me/mailFolders/${f.id}/childFolders`);
@@ -78,8 +86,10 @@ export async function listAllFolders(): Promise<MailFolder[]> {
 export async function ensureFolder(name: string, existing: MailFolder[]): Promise<string> {
   const found = existing.find((f) => f.displayName.toLowerCase() === name.toLowerCase());
   if (found) return found.id;
-  const created = folderSchema.parse(
+  const created = parseGraph(
+    folderSchema,
     await graph("/me/mailFolders", { method: "POST", body: JSON.stringify({ displayName: name }) }),
+    `create folder ${name}`,
   );
   return created.id;
 }
@@ -91,7 +101,7 @@ export async function listMessages(folderId: string, limit: number): Promise<Gra
     `/me/mailFolders/${folderId}/messages?$top=${Math.min(limit, 100)}` +
     `&$select=id,subject,bodyPreview,receivedDateTime,isRead,webLink,from&$orderby=receivedDateTime desc`;
   while (next && out.length < limit) {
-    const p: z.infer<ReturnType<typeof page<typeof messageSchema>>> = page(messageSchema).parse(await graph(next));
+    const p: z.infer<ReturnType<typeof page<typeof messageSchema>>> = parseGraph(page(messageSchema), await graph(next), "message list");
     out.push(...p.value);
     next = p["@odata.nextLink"];
   }
@@ -111,8 +121,10 @@ async function batched(requests: { method: string; url: string; body?: unknown }
       url: r.url,
       ...(r.body ? { body: r.body, headers: { "Content-Type": "application/json" } } : {}),
     }));
-    const res = batchSchema.parse(
+    const res = parseGraph(
+      batchSchema,
       await graph("/$batch", { method: "POST", body: JSON.stringify({ requests: chunk }) }),
+      "batch",
     );
     for (const r of res.responses) if (r.status >= 300) failures.push(`${chunk[Number(r.id)].url} -> ${r.status}`);
   }
