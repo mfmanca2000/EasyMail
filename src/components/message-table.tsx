@@ -75,7 +75,7 @@ export function MessageTable({
   const swiped = useRef(false);
 
   const fmt = useMemo(
-    () => new Intl.DateTimeFormat("en-GB", { timeZone, day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }),
+    () => new Intl.DateTimeFormat("en-GB", { timeZone, day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }),
     [timeZone],
   );
 
