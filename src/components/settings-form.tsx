@@ -79,6 +79,11 @@ export function SettingsForm({ initial, zones }: { initial: Settings; zones: str
               onChange={(e) => set("confidenceThreshold", Number(e.target.value))} />
           </div>
           <div className={row}>
+            <Label htmlFor="bucket">Minimum confidence to show unreviewed mail in its predicted tab (0.5–0.99)</Label>
+            <Input id="bucket" type="number" step={0.01} min={0.5} max={0.99} className="w-24" value={s.autoBucketConfidence}
+              onChange={(e) => set("autoBucketConfidence", Number(e.target.value))} />
+          </div>
+          <div className={row}>
             <Label htmlFor="custom">Also move predicted mail out of my own custom folders</Label>
             <Switch id="custom" checked={s.moveFromCustomFolders} onCheckedChange={(v) => set("moveFromCustomFolders", v)} />
           </div>

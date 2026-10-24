@@ -59,13 +59,11 @@ export function effectiveLabel(r: MessageRow, threshold: number): Label | null {
   return r.score >= 0.5 ? "important" : "not_important";
 }
 
-/** Unconfirmed mail the model is at least this sure about is shown in its predicted tab instead of "To review". */
-export const AUTO_BUCKET_CONFIDENCE = 0.95;
-
-export function autoBucket(score: number | null): Label | null {
+/** Prediction sure enough (`settings.autoBucketConfidence`) to show the mail in its tab instead of "To review". */
+export function autoBucket(score: number | null, confidence: number): Label | null {
   if (score == null) return null;
-  if (score >= AUTO_BUCKET_CONFIDENCE) return "important";
-  if (score <= 1 - AUTO_BUCKET_CONFIDENCE) return "not_important";
+  if (score >= confidence) return "important";
+  if (score <= 1 - confidence) return "not_important";
   return null;
 }
 
@@ -291,7 +289,7 @@ export async function stats(settings?: Settings): Promise<Stats> {
                  WHEN score <= ? THEN 'notImportant'
                  ELSE 'review' END AS k, COUNT(*) AS n
      FROM messages GROUP BY k`,
-    [cutoff, cutoff, AUTO_BUCKET_CONFIDENCE, 1 - AUTO_BUCKET_CONFIDENCE],
+    [cutoff, cutoff, settings.autoBucketConfidence, 1 - settings.autoBucketConfidence],
   );
   const n = (k: string) => Number(rows.find((r) => r.k === k)?.n ?? 0);
   const folderRows = await query<{ k: string; n: number }>(
