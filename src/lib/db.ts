@@ -41,9 +41,20 @@ function databaseUrl(): string {
   return e.TURSO_DATABASE_URL || e.DATABASE_URL || "file:easymail.db";
 }
 
-/** True on Vercel when the database is a local file: it lives on a throwaway filesystem and is wiped on every deploy. */
+/** True in a production build when the database is a local file: on serverless hosts such as Vercel it is wiped on every deploy. */
 export function databaseIsEphemeral(): boolean {
-  return !!process.env.VERCEL && databaseUrl().startsWith("file:");
+  return (!!process.env.VERCEL || process.env.NODE_ENV === "production") && databaseUrl().startsWith("file:");
+}
+
+/** Where data is stored, for the diagnostics line. Never includes the auth token or URL path/query. */
+export function databaseLabel(): string {
+  const url = databaseUrl();
+  if (url.startsWith("file:")) return url;
+  try {
+    return new URL(url).host;
+  } catch {
+    return "unrecognised URL";
+  }
 }
 
 export async function db(): Promise<Client> {
