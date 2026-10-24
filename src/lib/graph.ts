@@ -167,13 +167,17 @@ export async function moveMessages(
   return { moved, failed };
 }
 
-/** Delete messages. `permanent` skips the Deleted Items folder. Returns the number of failures. */
+/**
+ * Delete messages. `permanent` skips the Deleted Items folder. Returns the number of failures.
+ * A plain Graph DELETE soft-deletes into the hidden Recoverable Items folder, so the
+ * non-permanent path moves to the well-known `deleteditems` folder instead.
+ */
 export async function deleteMessages(ids: string[], permanent: boolean): Promise<number> {
   const failures = await batched(
     ids.map((id) =>
       permanent
         ? { method: "POST", url: `/me/messages/${id}/permanentDelete` }
-        : { method: "DELETE", url: `/me/messages/${id}` },
+        : { method: "POST", url: `/me/messages/${id}/move`, body: { destinationId: "deleteditems" } },
     ),
   );
   return failures.length;
