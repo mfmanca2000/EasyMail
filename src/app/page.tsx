@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Settings as SettingsIcon } from "lucide-react";
 import { ActionsBar } from "@/components/actions-bar";
 import { MessageTable, type MessageItem } from "@/components/message-table";
@@ -6,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { query } from "@/lib/db";
+import { kvGet, query } from "@/lib/db";
 import { MIN_EXAMPLES } from "@/lib/classifier";
 import { stats, type MessageRow } from "@/lib/mail";
 import { getSettings } from "@/lib/settings";
@@ -14,6 +15,10 @@ import { getSettings } from "@/lib/settings";
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
+  // The session cookie outlives the stored Microsoft refresh token (e.g. after a database change): sign in again.
+  if (!(await kvGet("ms_refresh_token"))) {
+    redirect(`/login?error=${encodeURIComponent("Not connected to Microsoft. Please sign in again.")}`);
+  }
   const [rows, s, settings] = await Promise.all([
     query<MessageRow>("SELECT * FROM messages ORDER BY received_at DESC LIMIT 1500"),
     stats(),
