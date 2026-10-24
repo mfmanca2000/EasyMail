@@ -29,7 +29,7 @@ npm run dev
 Open <http://localhost:3000>, sign in, press **Sync**.
 
 ### 3. Deploy so it works from your phone and on a schedule
-- Deploy to Vercel. The local SQLite file doesn't persist there, so create a free [Turso](https://turso.tech) database and set `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN` (the older `DATABASE_URL` / `DATABASE_AUTH_TOKEN` still work as fallbacks). Set the other variables from `.env.example`, with `APP_URL` as your Vercel URL.
+- Deploy to Vercel. The local SQLite file doesn't persist there, so create a free [Turso](https://turso.tech) database and set `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN` (the older `DATABASE_URL` / `DATABASE_AUTH_TOKEN` still work as fallbacks). If a Vercel integration injects its own `TURSO_*` values (for example a new database per deployment), set `EASYMAIL_DATABASE_URL` / `EASYMAIL_DATABASE_AUTH_TOKEN` instead: they take precedence. Set the other variables from `.env.example`, with `APP_URL` as your Vercel URL.
 - `vercel.json` registers a daily cron at 08:00 UTC (`/api/cron/run`: sync, optional auto-filing, digest when due), which fits Vercel's **Hobby plan** (daily crons only). For more frequent syncs, call `GET /api/cron/run` from any scheduler (GitHub Actions, cron-job.org) with header `Authorization: Bearer $CRON_SECRET`. The digest sends on the first run at/after your chosen hour, so set the digest hour at or before the cron's local time (or it goes out the next day).
 - On your phone open the URL in Chrome → menu → **Add to Home screen / Install app**.
 
