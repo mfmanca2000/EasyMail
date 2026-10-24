@@ -15,6 +15,8 @@ export const settingsSchema = z.object({
   notImportantFolder: z.string().min(1).max(50),
   /** How many recent messages to read per folder on each sync. */
   syncDepth: z.number().int().min(25).max(1000),
+  /** Unconfirmed mail older than this many days is left out of "To review" (0 = show everything). */
+  reviewDays: z.number().int().min(0).max(3650),
 });
 
 export type Settings = z.infer<typeof settingsSchema>;
@@ -29,4 +31,5 @@ export const DEFAULT_SETTINGS: Settings = {
   importantFolder: "Important",
   notImportantFolder: "Not Important",
   syncDepth: 200,
+  reviewDays: 14,
 };

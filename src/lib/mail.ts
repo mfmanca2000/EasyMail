@@ -265,12 +265,21 @@ export type Stats = {
   ready: boolean;
 };
 
+/** ISO timestamp before which unconfirmed mail is hidden from "To review", or null when nothing is hidden. */
+export function reviewCutoff(settings: Settings): string | null {
+  return settings.reviewDays > 0 ? new Date(Date.now() - settings.reviewDays * 86_400_000).toISOString() : null;
+}
+
 export async function stats(settings?: Settings): Promise<Stats> {
+  settings ??= await getSettings();
+  const cutoff = reviewCutoff(settings);
   const rows = await query<{ k: string; n: number }>(
     `SELECT CASE WHEN label_source IN ('user','folder') AND label = 'important' THEN 'important'
                  WHEN label_source IN ('user','folder') AND label = 'not_important' THEN 'notImportant'
+                 WHEN ? IS NOT NULL AND received_at < ? THEN 'old'
                  ELSE 'review' END AS k, COUNT(*) AS n
      FROM messages GROUP BY k`,
+    [cutoff, cutoff],
   );
   const n = (k: string) => Number(rows.find((r) => r.k === k)?.n ?? 0);
   const folderRows = await query<{ k: string; n: number }>(

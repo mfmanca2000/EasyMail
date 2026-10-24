@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { databaseLabel, kvGet, query } from "@/lib/db";
 import { MIN_EXAMPLES } from "@/lib/classifier";
-import { planMoves, stats, type MessageRow } from "@/lib/mail";
+import { planMoves, reviewCutoff, stats, type MessageRow } from "@/lib/mail";
 import { getSettings } from "@/lib/settings";
 
 export const dynamic = "force-dynamic";
@@ -26,9 +26,11 @@ export default async function Home() {
   ]);
 
   const plan = new Map((await planMoves(settings)).map((p) => [p.id, p.to]));
-  const items: BoardItem[] = rows.map((r) => {
+  const cutoff = reviewCutoff(settings);
+  const items: BoardItem[] = rows.flatMap((r) => {
     const confirmed = r.label_source === "user" || r.label_source === "folder";
-    return {
+    if (!confirmed && cutoff && r.received_at < cutoff) return [];
+    return [{
       id: r.id,
       sender: r.sender,
       senderName: r.sender_name,
@@ -41,7 +43,7 @@ export default async function Home() {
       label: confirmed ? r.label : null,
       score: r.score,
       planned: plan.get(r.id) ?? null,
-    };
+    }];
   });
 
   return (
