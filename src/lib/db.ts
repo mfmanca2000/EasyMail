@@ -36,10 +36,16 @@ const SCHEMA = [
   )`,
 ];
 
-function databaseUrl(): string {
+/** The database in use and the variable it came from; the auth token always comes from the matching variable. */
+function databaseConfig(): { url: string; authToken?: string; source: string } {
   const e = env();
-  return e.TURSO_DATABASE_URL || e.DATABASE_URL || "file:easymail.db";
+  if (e.EASYMAIL_DATABASE_URL) return { url: e.EASYMAIL_DATABASE_URL, authToken: e.EASYMAIL_DATABASE_AUTH_TOKEN, source: "EASYMAIL_DATABASE_URL" };
+  if (e.TURSO_DATABASE_URL) return { url: e.TURSO_DATABASE_URL, authToken: e.TURSO_AUTH_TOKEN ?? e.DATABASE_AUTH_TOKEN, source: "TURSO_DATABASE_URL" };
+  if (e.DATABASE_URL) return { url: e.DATABASE_URL, authToken: e.DATABASE_AUTH_TOKEN ?? e.TURSO_AUTH_TOKEN, source: "DATABASE_URL" };
+  return { url: "file:easymail.db", source: "default" };
 }
+
+const databaseUrl = () => databaseConfig().url;
 
 /** True in a production build when the database is a local file: on serverless hosts such as Vercel it is wiped on every deploy. */
 export function databaseIsEphemeral(): boolean {
@@ -48,22 +54,19 @@ export function databaseIsEphemeral(): boolean {
 
 /** Where data is stored, for the diagnostics line. Never includes the auth token or URL path/query. */
 export function databaseLabel(): string {
-  const url = databaseUrl();
-  if (url.startsWith("file:")) return url;
+  const { url, source } = databaseConfig();
+  if (url.startsWith("file:")) return `${url} (${source})`;
   try {
-    return new URL(url).host;
+    return `${new URL(url).host} (${source})`;
   } catch {
-    return "unrecognised URL";
+    return `unrecognised URL (${source})`;
   }
 }
 
 export async function db(): Promise<Client> {
   if (!client) {
-    const e = env();
-    client = createClient({
-      url: databaseUrl(),
-      authToken: e.TURSO_AUTH_TOKEN ?? e.DATABASE_AUTH_TOKEN,
-    });
+    const { url, authToken } = databaseConfig();
+    client = createClient({ url, authToken });
   }
   if (!ready) {
     const c = client;
