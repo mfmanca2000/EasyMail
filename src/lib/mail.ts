@@ -107,7 +107,7 @@ export async function sync(opts: { organize?: boolean } = {}): Promise<SyncResul
                 was_junk=MAX(was_junk, excluded.was_junk), is_read=excluded.is_read`,
         args: [
           m.id, folderId, kind, kind === "junk" ? 1 : 0, m.subject ?? "", sender,
-          m.from?.emailAddress.name ?? "", (m.bodyPreview ?? "").slice(0, 300), m.receivedDateTime,
+          m.from?.emailAddress.name ?? "", (m.bodyPreview ?? "").slice(0, 300), m.receivedDateTime ?? prev?.received_at ?? now,
           prev?.first_seen_at ?? now, m.isRead ? 1 : 0, m.webLink ?? null,
           fromFolder ? kind : null, fromFolder ? "folder" : null,
         ],
