@@ -91,6 +91,11 @@ export function SettingsForm({ initial, zones }: { initial: Settings; zones: str
             <Input id="not" className="w-48" value={s.notImportantFolder} onChange={(e) => set("notImportantFolder", e.target.value)} />
           </div>
           <div className={row}>
+            <Label htmlFor="reviewDays">Hide unreviewed mail older than (days, 0 = never hide)</Label>
+            <Input id="reviewDays" type="number" min={0} max={3650} className="w-24" value={s.reviewDays}
+              onChange={(e) => set("reviewDays", Number(e.target.value))} />
+          </div>
+          <div className={row}>
             <Label htmlFor="depth">Messages read per folder on each sync</Label>
             <Input id="depth" type="number" min={25} max={1000} className="w-24" value={s.syncDepth}
               onChange={(e) => set("syncDepth", Number(e.target.value))} />
