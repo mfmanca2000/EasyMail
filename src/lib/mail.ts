@@ -34,7 +34,9 @@ export type MessageRow = {
   digested: number;
 };
 
-export type Folders = { important: string; notImportant: string; inbox: string; junk: string };
+const TRACK_SINCE_KEY = "track_since";
+
+export type Folders ={ important: string; notImportant: string; inbox: string; junk: string };
 
 export async function getFolders(): Promise<Folders | null> {
   const raw = await kvGet("folders");
@@ -73,6 +75,8 @@ export async function sync(opts: { organize?: boolean } = {}): Promise<SyncResul
     junk: wk.junkemail,
   };
   await kvSet("folders", JSON.stringify(folders));
+  // Only mail that arrives after the first sync gets filed automatically; the existing backlog is left alone.
+  if (!(await kvGet(TRACK_SINCE_KEY))) await kvSet(TRACK_SINCE_KEY, new Date().toISOString());
 
   const skip = new Set([wk.sentitems, wk.drafts, wk.deleteditems, wk.outbox]);
   const scan = new Map<string, FolderKind>();
@@ -164,8 +168,11 @@ export type Plan = { id: string; to: Label }[];
 /** Messages that are not in the folder their label says they belong in. */
 export async function planMoves(settings: Settings): Promise<Plan> {
   const rows = await query<MessageRow>("SELECT * FROM messages");
+  const since = (await kvGet(TRACK_SINCE_KEY)) ?? "";
   const plan: Plan = [];
   for (const r of rows) {
+    // Old mail is only moved when the user labelled it explicitly.
+    if (r.received_at < since && r.label_source !== "user") continue;
     // Only reshuffle mail in inbox/junk or in our folders; mail in other folders moves only on an explicit user label
     // unless the user opted in to moving predicted mail out of custom folders.
     const free = r.folder_kind !== "other" || r.label_source === "user" || settings.moveFromCustomFolders;
