@@ -7,7 +7,7 @@ import { MailBoard, type BoardItem } from "@/components/mail-board";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { kvGet, query } from "@/lib/db";
+import { databaseLabel, kvGet, query } from "@/lib/db";
 import { MIN_EXAMPLES } from "@/lib/classifier";
 import { planMoves, stats, type MessageRow } from "@/lib/mail";
 import { getSettings } from "@/lib/settings";
@@ -73,6 +73,9 @@ export default async function Home() {
       <ActionsBar deletable={s.inNotImportantFolder + s.junk} />
 
       <MailBoard items={items} stats={s} timeZone={settings.timezone} />
+      <footer className="pt-2 text-xs text-muted-foreground">
+        Database: {databaseLabel()} · {s.total} messages stored · build {(process.env.VERCEL_GIT_COMMIT_SHA ?? "local").slice(0, 7)}
+      </footer>
     </main>
   );
 }

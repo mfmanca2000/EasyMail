@@ -253,6 +253,8 @@ export type Stats = {
   pendingImportant: number;
   pendingNotImportant: number;
   labelled: number;
+  /** All messages stored, for the diagnostics line. */
+  total: number;
   ready: boolean;
 };
 
@@ -280,6 +282,7 @@ export async function stats(settings?: Settings): Promise<Stats> {
     pendingImportant: plan.filter((p) => p.to === "important").length,
     pendingNotImportant: plan.filter((p) => p.to === "not_important").length,
     labelled: total,
+    total: rows.reduce((a, r) => a + Number(r.n), 0),
     ready: total >= MIN_EXAMPLES,
   };
 }
