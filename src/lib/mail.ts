@@ -111,7 +111,7 @@ export async function sync(opts: { organize?: boolean } = {}): Promise<SyncResul
                 label=excluded.label, label_source=excluded.label_source`,
         args: [
           m.id, folderId, kind, kind === "junk" ? 1 : 0, m.subject ?? "", sender,
-          m.from?.emailAddress.name ?? "", (m.bodyPreview ?? "").slice(0, 300), m.receivedDateTime,
+          m.from?.emailAddress.name ?? "", (m.bodyPreview ?? "").slice(0, 300), m.receivedDateTime ?? prev?.received_at ?? now,
           prev?.first_seen_at ?? now, m.isRead ? 1 : 0, m.webLink ?? null, label, source,
         ],
       });
