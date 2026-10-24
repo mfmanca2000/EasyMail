@@ -48,11 +48,8 @@ function Suggestion({ m }: { m: MessageItem }) {
   );
 }
 
-/** Category a swipe moves the message to: the opposite of its label, or of the model's suggestion. */
-function swipeTarget(m: MessageItem): "important" | "not_important" {
-  const current = m.label ?? (m.score == null ? "important" : m.score >= 0.5 ? "important" : "not_important");
-  return current === "important" ? "not_important" : "important";
-}
+/** Swipe left marks a message important, swipe right marks it not important. */
+const swipeTarget = (dx: number): "important" | "not_important" => (dx < 0 ? "important" : "not_important");
 
 const SWIPE_THRESHOLD = 90;
 
@@ -94,22 +91,23 @@ export function MessageTable({
     if (!d) return;
     const dx = e.clientX - d.x;
     if (!d.active) {
-      // Only start once the gesture is clearly a leftward, mostly horizontal drag; vertical scrolling stays native.
-      if (Math.abs(dx) < 10 || Math.abs(dx) < Math.abs(e.clientY - d.y) * 1.5 || dx > 0) return;
+      // Only start once the gesture is clearly a mostly horizontal drag; vertical scrolling stays native.
+      if (Math.abs(dx) < 10 || Math.abs(dx) < Math.abs(e.clientY - d.y) * 1.5) return;
       d.active = true;
       swiped.current = true;
       e.currentTarget.setPointerCapture(e.pointerId);
     }
-    setSwipe({ id: d.id, dx: Math.min(0, dx) });
+    setSwipe({ id: d.id, dx });
   }
   function onPointerEnd(e: React.PointerEvent, m: MessageItem) {
     const d = drag.current;
     drag.current = null;
     if (!d?.active) return;
-    const dx = Math.min(0, e.clientX - d.x);
-    if (e.type === "pointerup" && dx <= -SWIPE_THRESHOLD) {
-      setSwipe({ id: m.id, dx: -window.innerWidth, released: true });
-      void label([m.id], swipeTarget(m)).finally(() => setSwipe(null));
+    const dx = e.clientX - d.x;
+    const target = swipeTarget(dx);
+    if (e.type === "pointerup" && Math.abs(dx) >= SWIPE_THRESHOLD && m.label !== target) {
+      setSwipe({ id: m.id, dx: Math.sign(dx) * window.innerWidth, released: true });
+      void label([m.id], target).finally(() => setSwipe(null));
     } else {
       setSwipe(null);
     }
@@ -280,8 +278,8 @@ export function MessageTable({
                     row.original.isJunk && "bg-amber-500/10 hover:bg-amber-500/15",
                     row.getIsSelected() && "bg-muted",
                     swipe?.id === row.id &&
-                      -swipe.dx >= SWIPE_THRESHOLD &&
-                      (swipeTarget(row.original) === "important" ? "bg-emerald-500/25" : "bg-slate-500/25"),
+                      Math.abs(swipe.dx) >= SWIPE_THRESHOLD &&
+                      (swipeTarget(swipe.dx) === "important" ? "bg-sky-500/25" : "bg-red-500/25"),
                   )}
                 >
                   {row.getVisibleCells().map((cell) => (
@@ -303,7 +301,7 @@ export function MessageTable({
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Swipe a message left to move it to the other category (the row tints once you have gone far enough).
+        Swipe a message left to mark it important (blue) or right to mark it not important (red); the row tints once you have gone far enough.
       </p>
       <div className="flex items-center justify-between text-sm text-muted-foreground">
         <span>
