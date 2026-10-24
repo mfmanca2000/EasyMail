@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { databaseLabel, kvGet, query } from "@/lib/db";
 import { MIN_EXAMPLES } from "@/lib/classifier";
-import { planMoves, reviewCutoff, stats, type MessageRow } from "@/lib/mail";
+import { autoBucket, planMoves, reviewCutoff, stats, type MessageRow } from "@/lib/mail";
 import { getSettings } from "@/lib/settings";
 
 export const dynamic = "force-dynamic";
@@ -40,7 +40,8 @@ export default async function Home() {
       isJunk: r.folder_kind === "junk" || !!r.was_junk,
       isRead: !!r.is_read,
       webLink: r.web_link,
-      label: confirmed ? r.label : null,
+      label: confirmed ? r.label : autoBucket(r.score),
+      auto: !confirmed && autoBucket(r.score) !== null,
       score: r.score,
       planned: plan.get(r.id) ?? null,
     }];
