@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { api } from "@/lib/client";
 import { cn } from "@/lib/utils";
 
 export type MessageItem = {
@@ -73,6 +74,7 @@ export function MessageTable({
   const [swipe, setSwipe] = useState<{ id: string; dx: number; released?: boolean } | null>(null);
   const drag = useRef<{ id: string; x: number; y: number; active: boolean } | null>(null);
   const swiped = useRef(false);
+  const [readIds, setReadIds] = useState<Set<string>>(new Set());
 
   const fmt = useMemo(
     () => new Intl.DateTimeFormat("en-GB", { timeZone, day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }),
@@ -82,6 +84,19 @@ export function MessageTable({
   async function label(ids: string[], value: "important" | "not_important") {
     setSelection({});
     await onLabel(ids, value);
+  }
+
+  /** Opening a message in Outlook marks it read there too; the row un-bolds at once. */
+  function markRead(m: MessageItem) {
+    if (m.isRead || readIds.has(m.id)) return;
+    setReadIds((s) => new Set(s).add(m.id));
+    api("/api/read", "POST", { id: m.id }).catch(() => {
+      setReadIds((s) => {
+        const next = new Set(s);
+        next.delete(m.id);
+        return next;
+      });
+    });
   }
 
   function onPointerDown(e: React.PointerEvent, id: string) {
@@ -143,13 +158,14 @@ export function MessageTable({
           return (
             <div className="min-w-0 max-w-[52ch]">
               <div className="flex items-center gap-2">
-                <span className={cn("truncate", !m.isRead && "font-semibold")}>{m.senderName || m.sender}</span>
+                <span className={cn("truncate", !m.isRead && !readIds.has(m.id) && "font-semibold")}>{m.senderName || m.sender}</span>
                 {m.isJunk && <Badge variant="warning">Junk</Badge>}
               </div>
               <a
                 href={m.webLink ?? undefined}
                 target="_blank"
                 rel="noreferrer"
+                onClick={() => markRead(m)}
                 className="block truncate text-sm hover:underline"
               >
                 {m.subject || "(no subject)"}
@@ -197,7 +213,7 @@ export function MessageTable({
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [fmt],
+    [fmt, readIds],
   );
 
   const table = useReactTable({

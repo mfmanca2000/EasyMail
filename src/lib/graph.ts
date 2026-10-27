@@ -183,6 +183,11 @@ export async function deleteMessages(ids: string[], permanent: boolean): Promise
   return failures.length;
 }
 
+/** Mark a message as read in the mailbox. */
+export async function markMessageRead(id: string): Promise<void> {
+  await graph(`/me/messages/${id}`, { method: "PATCH", body: JSON.stringify({ isRead: true }) });
+}
+
 export async function sendMailToSelf(to: string, subject: string, html: string) {
   await graph("/me/sendMail", {
     method: "POST",
