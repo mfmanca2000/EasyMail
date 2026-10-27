@@ -76,11 +76,16 @@ export function MailBoard({ items, stats, timeZone }: { items: BoardItem[]; stat
   }, [items, stats, optimistic]);
 
   // Show the number of mails to review on the installed app's icon (Badging API; a no-op where unsupported).
+  // iOS and Android only show app badges once notifications are allowed, and iOS only lets a tap ask for that.
   const reviewCount = view.counts.review;
   useEffect(() => {
     const nav = navigator as Navigator & { setAppBadge?: (n?: number) => Promise<void>; clearAppBadge?: () => Promise<void> };
-    const update = reviewCount > 0 ? nav.setAppBadge?.(reviewCount) : nav.clearAppBadge?.();
-    update?.catch(() => {});
+    const apply = () => (reviewCount > 0 ? nav.setAppBadge?.(reviewCount) : nav.clearAppBadge?.())?.catch(() => {});
+    apply();
+    if (!("Notification" in window) || Notification.permission !== "default" || !nav.setAppBadge) return;
+    const ask = () => Notification.requestPermission().then(apply, () => {});
+    window.addEventListener("pointerdown", ask, { once: true });
+    return () => window.removeEventListener("pointerdown", ask);
   }, [reviewCount]);
 
   async function onLabel(ids: string[], value: Label) {
