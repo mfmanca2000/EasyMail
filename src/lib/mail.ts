@@ -214,11 +214,11 @@ export async function organize(settings?: Settings): Promise<{ moved: number; fa
         .filter((p) => res.moved.has(p.id))
         .map((p) => ({
           // Graph gives a moved message a new id; follow it. Predicted moves are stored as 'auto' so they are not learned as if confirmed.
-          // The stored web link embeds the old id, so it is cleared here and refreshed by the next sync.
-          sql: `UPDATE messages SET id = ?, folder_id = ?, folder_kind = ?, web_link = NULL,
+          // The web link embeds the id too, so it is replaced with the one Graph returned for the moved message.
+          sql: `UPDATE messages SET id = ?, folder_id = ?, folder_kind = ?, web_link = ?,
                   label = COALESCE(label, ?), label_source = COALESCE(label_source, 'auto')
                 WHERE id = ?`,
-          args: [res.moved.get(p.id)!, dest, to, to, p.id],
+          args: [res.moved.get(p.id)!.id, dest, to, res.moved.get(p.id)!.webLink, to, p.id],
         })),
       "write",
     );

@@ -133,13 +133,13 @@ async function batched(requests: { method: string; url: string; body?: unknown }
 
 /**
  * Move messages to `destinationId`. Graph assigns a new id to a moved message,
- * so this returns old id -> new id for the ones that succeeded, plus the failed ids.
+ * so this returns old id -> new id and web link (which embeds the id) for the ones that succeeded, plus the failed ids.
  */
 export async function moveMessages(
   ids: string[],
   destinationId: string,
-): Promise<{ moved: Map<string, string>; failed: string[] }> {
-  const moved = new Map<string, string>();
+): Promise<{ moved: Map<string, { id: string; webLink: string | null }>; failed: string[] }> {
+  const moved = new Map<string, { id: string; webLink: string | null }>();
   const failed: string[] = [];
   for (let i = 0; i < ids.length; i += 20) {
     const chunk = ids.slice(i, i + 20);
@@ -159,8 +159,8 @@ export async function moveMessages(
     );
     for (const r of res.responses) {
       const oldId = chunk[Number(r.id)];
-      const newId = z.object({ id: z.string() }).safeParse(r.body);
-      if (r.status < 300 && newId.success) moved.set(oldId, newId.data.id);
+      const newMsg = z.object({ id: z.string(), webLink: z.string().nullish() }).safeParse(r.body);
+      if (r.status < 300 && newMsg.success) moved.set(oldId, { id: newMsg.data.id, webLink: newMsg.data.webLink ?? null });
       else failed.push(oldId);
     }
   }
