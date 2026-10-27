@@ -116,7 +116,8 @@ export async function sync(opts: { organize?: boolean } = {}): Promise<SyncResul
         sql: `INSERT INTO messages(id, folder_id, folder_kind, was_junk, subject, sender, sender_name, preview, received_at, first_seen_at, is_read, web_link, label, label_source)
               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)
               ON CONFLICT(id) DO UPDATE SET folder_id=excluded.folder_id, folder_kind=excluded.folder_kind,
-                was_junk=MAX(was_junk, excluded.was_junk), is_read=excluded.is_read`,
+                was_junk=MAX(was_junk, excluded.was_junk), is_read=excluded.is_read,
+                web_link=COALESCE(excluded.web_link, web_link)`,
         args: [
           m.id, folderId, kind, kind === "junk" ? 1 : 0, m.subject ?? "", sender,
           m.from?.emailAddress.name ?? "", (m.bodyPreview ?? "").slice(0, 300), m.receivedDateTime ?? prev?.received_at ?? now,
@@ -212,7 +213,8 @@ export async function organize(settings?: Settings): Promise<{ moved: number; fa
         .filter((p) => res.moved.has(p.id))
         .map((p) => ({
           // Graph gives a moved message a new id; follow it. Predicted moves are stored as 'auto' so they are not learned as if confirmed.
-          sql: `UPDATE messages SET id = ?, folder_id = ?, folder_kind = ?,
+          // The stored web link embeds the old id, so it is cleared here and refreshed by the next sync.
+          sql: `UPDATE messages SET id = ?, folder_id = ?, folder_kind = ?, web_link = NULL,
                   label = COALESCE(label, ?), label_source = COALESCE(label_source, 'auto')
                 WHERE id = ?`,
           args: [res.moved.get(p.id)!, dest, to, to, p.id],
