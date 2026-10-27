@@ -5,6 +5,7 @@ import {
   ensureFolder,
   listAllFolders,
   listMessages,
+  markMessageRead,
   moveMessages,
   wellKnownFolderIds,
 } from "./graph";
@@ -224,6 +225,11 @@ export async function organize(settings?: Settings): Promise<{ moved: number; fa
     moved += res.moved.size;
   }
   return { moved, failed };
+}
+
+export async function markRead(id: string): Promise<void> {
+  await markMessageRead(id);
+  await exec("UPDATE messages SET is_read = 1 WHERE id = ?", [id]);
 }
 
 export async function setLabel(ids: string[], label: Label | "clear"): Promise<void> {
