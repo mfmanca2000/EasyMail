@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -74,6 +74,14 @@ export function MailBoard({ items, stats, timeZone }: { items: BoardItem[]; stat
     }
     return { lists, counts, pending };
   }, [items, stats, optimistic]);
+
+  // Show the number of mails to review on the installed app's icon (Badging API; a no-op where unsupported).
+  const reviewCount = view.counts.review;
+  useEffect(() => {
+    const nav = navigator as Navigator & { setAppBadge?: (n?: number) => Promise<void>; clearAppBadge?: () => Promise<void> };
+    const update = reviewCount > 0 ? nav.setAppBadge?.(reviewCount) : nav.clearAppBadge?.();
+    update?.catch(() => {});
+  }, [reviewCount]);
 
   async function onLabel(ids: string[], value: Label) {
     const previous = optimistic;
