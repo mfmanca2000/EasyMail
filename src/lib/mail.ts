@@ -97,7 +97,10 @@ export async function sync(opts: { organize?: boolean } = {}): Promise<SyncResul
     if (!scan.has(id)) scan.set(id, id === importantId ? "important" : "not_important");
   }
 
-  const existing = new Map((await query<MessageRow>("SELECT * FROM messages")).map((r) => [r.id, r]));
+  type Known = Pick<MessageRow, "id" | "folder_id" | "folder_kind" | "is_read" | "web_link" | "first_seen_at" | "received_at">;
+  const existing = new Map(
+    (await query<Known>("SELECT id, folder_id, folder_kind, is_read, web_link, first_seen_at, received_at FROM messages")).map((r) => [r.id, r]),
+  );
   const now = new Date().toISOString();
   const c = await db();
   const stmts: { sql: string; args: (string | number | null)[] }[] = [];
@@ -111,6 +114,9 @@ export async function sync(opts: { organize?: boolean } = {}): Promise<SyncResul
       const sender = (m.from?.emailAddress.address ?? "").toLowerCase();
       // A message that appears in one of our folders without us having put it there was moved by the user: learn from it.
       const fromFolder = (kind === "important" || kind === "not_important") && (!prev || prev.folder_kind !== kind);
+      // Nothing to write for a message that is exactly as we stored it.
+      if (prev && !fromFolder && prev.folder_id === folderId && prev.folder_kind === kind && prev.is_read === (m.isRead ? 1 : 0) &&
+          (!m.webLink || prev.web_link === m.webLink)) continue;
       // Existing rows keep whatever label is in the database right now: the user may have labelled them while this sync was
       // reading from Graph, so the label is never written back from the (stale) snapshot taken above.
       stmts.push({
@@ -166,18 +172,19 @@ async function rescore(): Promise<void> {
   const rows = await query<MessageRow>("SELECT * FROM messages WHERE label_source IS NULL OR label_source = 'auto'");
   if (!rows.length) return;
   const preds = await predictMany(rows.map(like));
+  const changed = rows.flatMap((r, i) => (r.score === preds[i].score ? [] : [{ sql: "UPDATE messages SET score = ? WHERE id = ?", args: [preds[i].score, r.id] }]));
+  if (!changed.length) return;
   const c = await db();
-  await c.batch(
-    rows.map((r, i) => ({ sql: "UPDATE messages SET score = ? WHERE id = ?", args: [preds[i].score, r.id] })),
-    "write",
-  );
+  for (let i = 0; i < changed.length; i += 200) await c.batch(changed.slice(i, i + 200), "write");
 }
 
 export type Plan = { id: string; to: Label }[];
 
 /** Messages that are not in the folder their label says they belong in. */
 export async function planMoves(settings: Settings): Promise<Plan> {
-  const rows = await query<MessageRow>("SELECT * FROM messages");
+  const rows = await query<MessageRow>(
+    "SELECT id, folder_kind, received_at, label, label_source, score FROM messages WHERE label IS NOT NULL OR score IS NOT NULL",
+  );
   const since = (await kvGet(TRACK_SINCE_KEY)) ?? "";
   const plan: Plan = [];
   for (const r of rows) {
@@ -286,7 +293,7 @@ export function reviewCutoff(settings: Settings): string | null {
   return settings.reviewDays > 0 ? new Date(Date.now() - settings.reviewDays * 86_400_000).toISOString() : null;
 }
 
-export async function stats(settings?: Settings): Promise<Stats> {
+export async function stats(settings?: Settings, precomputedPlan?: Plan): Promise<Stats> {
   settings ??= await getSettings();
   const cutoff = reviewCutoff(settings);
   const rows = await query<{ k: string; n: number }>(
@@ -305,7 +312,7 @@ export async function stats(settings?: Settings): Promise<Stats> {
   );
   const inFolder = (k: string) => Number(folderRows.find((r) => r.k === k)?.n ?? 0);
   const labelled = await query<{ n: number }>("SELECT important + not_important AS n FROM features WHERE feature = '__docs__'");
-  const plan = await planMoves(settings ?? (await getSettings()));
+  const plan = precomputedPlan ?? (await planMoves(settings));
   const total = Number(labelled[0]?.n ?? 0);
   return {
     important: n("important"),
