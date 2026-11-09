@@ -20,12 +20,16 @@ export default async function Home() {
     redirect(`/login?error=${encodeURIComponent("Not connected to Microsoft. Please sign in again.")}`);
   }
   const settings = await getSettings();
+  const planList = await planMoves(settings);
   const [rows, s] = await Promise.all([
-    query<MessageRow>("SELECT * FROM messages ORDER BY received_at DESC LIMIT 1500"),
-    stats(settings),
+    query<MessageRow>(
+      `SELECT id, folder_kind, was_junk, subject, sender, sender_name, preview, received_at, is_read, web_link, label, label_source, score
+       FROM messages ORDER BY received_at DESC LIMIT 1500`,
+    ),
+    stats(settings, planList),
   ]);
 
-  const plan = new Map((await planMoves(settings)).map((p) => [p.id, p.to]));
+  const plan = new Map(planList.map((p) => [p.id, p.to]));
   const cutoff = reviewCutoff(settings);
   const items: BoardItem[] = rows.flatMap((r) => {
     const confirmed = r.label_source === "user" || r.label_source === "folder";
