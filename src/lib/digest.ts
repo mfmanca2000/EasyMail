@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { env } from "./env";
 import { exec, kvGet, kvSet, query } from "./db";
-import { findInFolderBySubject, me, moveMessages, sendMailToSelf } from "./graph";
+import { findInFolderBySubject, me, moveMessages, postHtmlToFolder, sendMailToSelf } from "./graph";
 import { effectiveLabel, getFolders, type MessageRow } from "./mail";
 import { getSettings } from "./settings";
 
@@ -106,15 +106,27 @@ export async function sendDigest(): Promise<DigestResult> {
   const ai = await summarise(items);
   const subject = `[EasyMail] Digest ${date} #${Math.random().toString(36).slice(2, 6)}`;
   const addr = (await me()).mail;
-  await sendMailToSelf(addr, subject, render(items, ai, date));
+  const html = render(items, ai, date);
 
-  // The mail lands in the Inbox; file it into Important (the "[EasyMail]" subject is also always classified important).
-  for (let i = 0; i < 6; i++) {
-    await new Promise((r) => setTimeout(r, 2000));
-    const id = await findInFolderBySubject(folders.inbox, subject);
-    if (id) {
-      await moveMessages([id], folders.important);
-      break;
+  // Preferred: create the message directly in Important (no SMTP, so Outlook.com cannot bounce it as spam).
+  let posted = false;
+  try {
+    await postHtmlToFolder(folders.important, addr, subject, html);
+    posted = true;
+  } catch (e) {
+    console.error("digest direct post failed, falling back to sendMail", e);
+  }
+
+  if (!posted) {
+    await sendMailToSelf(addr, subject, html);
+    // The mail lands in the Inbox; file it into Important (the "[EasyMail]" subject is also always classified important).
+    for (let i = 0; i < 6; i++) {
+      await new Promise((r) => setTimeout(r, 2000));
+      const id = await findInFolderBySubject(folders.inbox, subject);
+      if (id) {
+        await moveMessages([id], folders.important);
+        break;
+      }
     }
   }
 

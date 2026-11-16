@@ -202,6 +202,29 @@ export async function sendMailToSelf(to: string, subject: string, html: string) 
   });
 }
 
+/**
+ * Put a message straight into a folder without sending it, so no outbound SMTP hop (which Outlook.com can reject with
+ * "5.7.501 Spam abuse detected from IP range"). Setting PR_MESSAGE_FLAGS (0x0E07) at creation makes it a normal
+ * received-looking message instead of a draft. Returns the new message id.
+ */
+export async function postHtmlToFolder(folderId: string, from: string, subject: string, html: string): Promise<string> {
+  const now = new Date().toISOString();
+  const res = await graph<{ id: string }>(`/me/mailFolders/${folderId}/messages`, {
+    method: "POST",
+    body: JSON.stringify({
+      subject,
+      body: { contentType: "HTML", content: html },
+      from: { emailAddress: { address: from } },
+      toRecipients: [{ emailAddress: { address: from } }],
+      receivedDateTime: now,
+      sentDateTime: now,
+      isRead: false,
+      singleValueExtendedProperties: [{ id: "Integer 0x0E07", value: "0" }],
+    }),
+  });
+  return res.id;
+}
+
 export async function findInFolderBySubject(folderId: string, subject: string): Promise<string | null> {
   const p = page(z.object({ id: z.string(), subject: z.string().nullish() })).parse(
     await graph(`/me/mailFolders/${folderId}/messages?$top=10&$select=id,subject&$orderby=receivedDateTime desc`),
